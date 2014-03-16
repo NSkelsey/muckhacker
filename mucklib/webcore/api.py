@@ -10,7 +10,7 @@ from utils import generate_csrf_token
 
 # Circular dependency! Proceed with caution
 api = Blueprint('api', __name__, url_prefix='/api')
-# app.py import api first
+# app.py imports the api first
 from app import mongo
 
 

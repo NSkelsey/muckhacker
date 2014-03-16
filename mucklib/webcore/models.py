@@ -121,8 +121,6 @@ if __name__ == "__main__":
     owner.set_password("ninechars")
     db.users.insert(owner.to_bson())
     
-
     print ret
     print db.users.find_one()
-
     

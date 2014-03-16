@@ -12,9 +12,12 @@
     <thead>
         <tr>
             <th class="checkbox-col">
-                <input type="checkbox" name="rowtoggle" class="action-rowtoggle">     
+                <input id="group-cb" type="checkbox" name="rowtoggle" class="action-rowtoggle">     
             </th>
             <th class="icon-col">
+            <a class="icon" id="mass-delete">
+                <span class="glyphicon glyphicon-trash"></span>
+            </a>
             </th>
             <th class="title-col">
                 <h4>Title</h4>
@@ -29,6 +32,57 @@
     {% endfor %}
 </table>
 <script>
+    // returns a partially filled post object from the selected icon
+    function getPost(icon) {
+        var tds = icon.parents('tr').find('td');
+        var post = {
+                title: $(tds[2]).find('a').text().trim(),
+                author: $(tds[3]).text().trim(),
+                id: $(tds[0]).find(':checkbox').val()
+            };
+        return post
+    }
+
+    function deletePost(post, icon) {
+        var del_url = "/api/delete/" + post.id;
+        // Sends the delete request to the api  
+        $.ajax({
+            type: "DELETE",
+            url: del_url,
+            success: function(){ icon.parents('tr').remove() },
+            dataType: "json",
+            contentType: "application/json"
+        });   
+    }
+
+    // Group level functions
+    $('#group-cb').click(function(){
+       $('tbody :checkbox').prop('checked', $(this).prop('checked'));
+    });
+
+    // MASS DELETE
+    $('#mass-delete').click(function(){
+        var boxes = $('tbody :checkbox:checked');
+        if (window.confirm("You are about to delete: " + boxes.length + " posts. Are you really sure?")) {
+            boxes.each(function(){
+                var icon = $(this);
+                var post = getPost(icon);
+                deletePost(post, icon);
+            });
+        }
+    });
+
+    // individual element listeners
+    // SINGLE DELETE
+    $('.icon-container > .trash').click(function(){
+        var icon = $(this)
+        var post = getPost(icon);
+        if (window.confirm("Do you really want to delete: " + post.title)) {
+            deletePost(post, icon);
+        }
+    });
+
+
     // attaches to table elements for functionality
     $('#new-post-btn').click(function(){
         var payload = {
