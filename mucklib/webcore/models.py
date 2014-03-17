@@ -11,7 +11,7 @@ class PostEncoder(json.JSONEncoder):
             return obj.to_dict()
         return json.JSONEncoder.default(self, obj)
 
-class Post():
+class Post(object):
     """The unit of work a journalist produces."""
 
     def __init__(self, json=False, bson=False):
@@ -26,7 +26,7 @@ class Post():
             raise ValueError("Need initialization values, dude")
 
     def __repr__(self):
-        return "<{}, {}, {}>".format(self._id, self.title, self.created)
+        return "<{}, {}, {}>".format(self.id, self.title, self.created)
 
     def __str__(self):
         return str(self.to_dict())
@@ -58,6 +58,24 @@ class Post():
         """Returns a dict that describes the class for the api """
         url = url_for('api.all_posts', _external=True)
         return { "url": url }
+
+class RevPost(Post):
+    """A RevPost properly handles posts that are stored as revisions"""
+
+    def __init__(self, bson=None):
+        super(RevPost, self).__init__(bson=bson)
+        self.next = bson.get('next')
+        self.prev = bson.get('prev')
+
+    def to_dict(self):
+        d = super(RevPost, self).to_dict()
+        d['next'] = str(self.next)
+        d['prev'] = str(self.prev)
+        return d
+
+    def first(self):
+        if self.next is None:
+            return True
 
 class User(): 
     """Login to admin side of MuckHacker

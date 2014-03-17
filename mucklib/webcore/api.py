@@ -3,8 +3,9 @@ import json
 from flask import Response, Blueprint
 from flask import abort, jsonify, url_for, request
 from flask.ext.login import login_required
+from bson.objectid import ObjectId
 
-from models import Post, PostEncoder
+from models import Post, PostEncoder, RevPost
 from forms import PostEditForm
 from utils import generate_csrf_token
 
@@ -67,6 +68,7 @@ def single_post(post_id):
 def edit_post(post_id):
     """Replaces post behind id with submitted one"""
     post_d = mongo.db.posts.find_one(post_id)
+    store_as_version(post_d)
     if post_d is None:
         abort(404) 
     form = PostEditForm.from_json(request.json, skip_unknown_keys=False)
@@ -83,6 +85,34 @@ def edit_post(post_id):
         abort(400)
 
 
+@api.route('/posts/<ObjectId:post_id>/<ObjectId:rev_id>/')
+def get_version(post_id, rev_id):
+    """Gets an old version of a post"""
+    rev_d = mongo.db.versions.find_one(rev_id)
+    if rev_d is None:
+        abort(404)
+    return jsonify(**RevPost(bson=rev_d).to_dict())
+    
+
+@api.route('/posts/<ObjectId:post_id>/versions/')
+def get_versions(post_id):
+    """returns a list of all the versions of the post"""
+    cur = mongo.db.versions.find({'p_id': post_id})
+    rev_l = [RevPost(bson=x) for x in  cur]
+    if len(rev_l) == 0:
+        return jsonify(list=[])
+    prep =  {p.id: p for p in rev_l}
+    first = filter(lambda x: x.first(), rev_l)[0]
+    sorted_l = []
+    _c = first
+    while _c.prev is not None:
+        sorted_l.append(_c.to_dict())
+        _n = prep[str(_c.prev)]
+        _c = _n
+    # get the first revision
+    sorted_l.append(_c.to_dict())
+    return jsonify(list=sorted_l)
+
 # no csrf protection here
 @api.route('/delete/<ObjectId:post_id>', methods=['DELETE'])
 @login_required
@@ -93,3 +123,26 @@ def delete_post(post_id):
     # in future must check that the user is the owner of the post
     mongo.db.posts.remove(post_id)
     return jsonify(success=True)
+
+
+def store_as_version(post_d):
+    # the id that defines our post in db.posts
+    p_id = post_d.pop('_id')
+    first_q = {'p_id': p_id, 'next': {'$exists': False}}
+    prev_rev = mongo.db.versions.find_one(first_q)
+    post_d['p_id'] = p_id
+    _id = mongo.db.versions.insert(post_d)
+
+    def q(_id): return {'_id': _id}
+
+    if prev_rev is None:
+        post_d['prev'] = None
+        mongo.db.versions.update(q(_id), post_d)
+    else:
+        # move previous revision off of _id
+        post_d['prev'] = prev_rev['_id']
+        prev_rev['next'] = _id
+        mongo.db.versions.update(q(prev_rev['_id']), prev_rev)
+        mongo.db.versions.update(q(_id), post_d)
+    
+
